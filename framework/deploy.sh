@@ -1,0 +1,16 @@
+#!/bin/bash
+
+BUILD_DIR="out"
+LIB_DIR="lib"
+
+echo "Compilation des sources Java..."
+# Classpath uniquement avec servlet-api et les librairies de l'application
+find -name "*.java" > sources.txt
+javac -cp "$LIB_DIR/servlet-api.jar" -d $BUILD_DIR @sources.txt
+
+if [ $? -ne 0 ]; then
+    echo "ERREUR: La compilation a échoué."
+    exit 1
+fi
+
+jar cvf ../app/src/main/webapp/WEB-INF/lib/framework.jar $BUILD_DIR .
