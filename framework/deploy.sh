@@ -3,6 +3,9 @@
 BUILD_DIR="out"
 LIB_DIR="lib"
 
+
+rm -rf $BUILD_DIR
+mkdir $BUILD_DIR
 echo "Compilation des sources Java..."
 # Classpath uniquement avec servlet-api et les librairies de l'application
 find -name "*.java" > sources.txt
