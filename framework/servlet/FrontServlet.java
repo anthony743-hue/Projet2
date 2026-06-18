@@ -9,8 +9,22 @@ import java.util.stream.Collectors;
 import jakarta.servlet.*;
 import jakarta.servlet.http.*;
 import java.util.ArrayList;
+import utils.Utility;
+import annotation.Controller;
 
 public class FrontServlet extends HttpServlet {
+    private List<String> listClass;
+    private String packageName;
+
+    public void init() throws ServletException{
+        listClass = new ArrayList<>();
+        packageName = this.getInitParameter("packageName");
+        try {
+            listClass.addAll(Utility.getAnnoted(packageName,Controller.class, ElementType.TYPE));
+        } catch (Exception e) {
+            throw new ServletException(e);
+        }
+    }
 
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
@@ -29,8 +43,13 @@ public class FrontServlet extends HttpServlet {
      */
     private void processRequest(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
+        StringBuffer sb = new StringBuffer();
+        for(String s : listClass){
+            sb.append(s).append(",");
+        }
         String url = request.getRequestURI().substring(1);
         PrintWriter out = response.getWriter();
         out.print(url);
+        out.println("Liste des classes : " + sb.toString());
     }
 }
