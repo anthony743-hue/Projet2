@@ -11,6 +11,8 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
+import helper.RequestHandler;
+
 public class Utility {
 
     public static List<Class<?>> getClassInPackage(String packageName) throws Exception {
@@ -51,47 +53,40 @@ public class Utility {
         return classes;
     }
 
-    public static List<String> getAnnoted(String packageName,
-            Class<? extends Annotation> annotation,
-            ElementType type) throws Exception {
+    public static List<Object> getAnnoted(String packageName,
+            Class<? extends Annotation> annotation) throws Exception {
         List<Class<?>> ls = getClassInPackage(packageName);
-        List<String> keep = new ArrayList<>();
+        List<Object> keep = new ArrayList<>();
 
-        if (type == ElementType.TYPE) {
-            for (Class<?> cl : ls) {
-                if (cl.isAnnotationPresent(annotation)) {
-                    keep.add(cl.getPackageName() + "." + cl.getSimpleName());
-                }
-            }
-        } else if (type == ElementType.METHOD) {
-            for (Class<?> cl : ls) {
-                keep.addAll(getAnnotedMethod(cl, annotation));
-            }
-        } else if (type == ElementType.FIELD) {
-            for (Class<?> cl : ls) {
-                keep.addAll(getAnnotedFields(cl, annotation));
+        for (Class<?> cl : ls) {
+            if (cl.isAnnotationPresent(annotation)) {
+                keep.add(cl);
             }
         }
         return keep;
     }
 
-    private static List<String> getAnnotedMethod(Class<?> cl, Class<? extends Annotation> annotation) {
-        List<String> keep = new ArrayList<>();
+    public static List<Object> getAnnotedMethod(Class<?> cl, Class<? extends Annotation> annotation) throws Exception {
+        List<Object> keep = new ArrayList<>();
         Method[] methods = cl.getDeclaredMethods();
         String nom = null;
+        Object o = cl.getConstructor().newInstance();
+        RequestHandler req = null;
+
         for (Method m : methods) {
             m.setAccessible(true);
 
             if (m.isAnnotationPresent(annotation)) {
                 nom = m.getName();
-                keep.add(cl.getName() + "." + nom);
+                req = new RequestHandler(o,m);
+                keep.add(req);        
             }
         }
 
         return keep;
     }
 
-    private static List<String> getAnnotedFields(Class<?> cl, Class<? extends Annotation> annotation) {
+    public static List<String> getAnnotedFields(Class<?> cl, Class<? extends Annotation> annotation) {
         List<String> keep = new ArrayList<>();
         Field[] fields = cl.getDeclaredFields();
         String nom = null;
