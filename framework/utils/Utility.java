@@ -11,7 +11,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
-import helper.RequestHandler;
+import helper.Mapping;
 
 public class Utility {
 
@@ -53,12 +53,10 @@ public class Utility {
         return classes;
     }
 
-    public static List<Object> getAnnoted(String packageName,
-            Class<? extends Annotation> annotation) throws Exception {
-        List<Class<?>> ls = getClassInPackage(packageName);
-        List<Object> keep = new ArrayList<>();
+    public static List<Class<?>> getAnnotedClasses(Class<? extends Annotation> annotation, List<Class<?>> listClass) throws Exception {
+        List<Class<?>> keep = new ArrayList<>();
 
-        for (Class<?> cl : ls) {
+        for (Class<?> cl : listClass) {
             if (cl.isAnnotationPresent(annotation)) {
                 keep.add(cl);
             }
@@ -66,36 +64,29 @@ public class Utility {
         return keep;
     }
 
-    public static List<Object> getAnnotedMethod(Class<?> cl, Class<? extends Annotation> annotation) throws Exception {
-        List<Object> keep = new ArrayList<>();
+    public static List<Method> getAnnotedMethod(Class<?> cl, Class<? extends Annotation> annotation) throws Exception {
+        List<Method> keep = new ArrayList<>();
         Method[] methods = cl.getDeclaredMethods();
-        String nom = null;
-        Object o = cl.getConstructor().newInstance();
-        RequestHandler req = null;
 
         for (Method m : methods) {
             m.setAccessible(true);
 
             if (m.isAnnotationPresent(annotation)) {
-                nom = m.getName();
-                req = new RequestHandler(o,m);
-                keep.add(req);        
+                keep.add(m);        
             }
         }
 
         return keep;
     }
 
-    public static List<String> getAnnotedFields(Class<?> cl, Class<? extends Annotation> annotation) {
-        List<String> keep = new ArrayList<>();
+    public static List<Field> getAnnotedFields(Class<?> cl, Class<? extends Annotation> annotation) {
+        List<Field> keep = new ArrayList<>();
         Field[] fields = cl.getDeclaredFields();
-        String nom = null;
         for (Field field : fields) {
             field.setAccessible(true);
 
             if (field.isAnnotationPresent(annotation)) {
-                nom = field.getName();
-                keep.add(cl.getName() + "." + nom);
+                keep.add(field);
             }
         }
 

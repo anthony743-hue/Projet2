@@ -13,29 +13,44 @@ import jakarta.servlet.*;
 import jakarta.servlet.http.*;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 
 import utils.Utility;
 import annotation.Controller;
 import annotation.UrlMapping;
-import helper.RequestHandler;
+import helper.Mapping;
+import helper.UrlMethod;
 import helper.UrlValidator;
 
 public class FrontServlet extends HttpServlet {
-    private Map<String, RequestHandler> registry;
+    private List<Class<?>> listClass;
+    private Map<UrlMethod, Mapping> registry;
 
-    public void init() throws ServletException{
-        registry = new ConcurrentHashMap<>();
+    public void init() throws ServletException {
+        registry = new HashMap<>();
         String packageName = this.getInitParameter("packageName");
         try {
-            List<Object> listClass = Utility.getAnnoted(packageName,Controller.class);
-            List<Object> listReq = null;
-            for(Object obj : listClass){
-                if( obj instanceof Class<?> cl ){
-                    listReq = Utility.getAnnotedMethod(cl,UrlMapping.class);
-                    for(Object o : listReq){
-                        if( o instanceof RequestHandler req ){
-                            register(req);
-                        }
+            listClass = Utility.getAnnotedClasses(Controller.class, Utility.getClassInPackage(packageName));
+            List<Method> listMethod = null;
+            UrlMethod urlMethod = null;
+            Mapping mapping = null;
+            String className = null;
+            String url = null, methode = null;
+
+            for (Class<?> cl : listClass) {
+                className = cl.getName();
+                listMethod = Utility.getAnnotedMethod(cl, UrlMapping.class);
+                for (Method m : listMethod) {
+                    m.setAccessible(true);
+
+                    url = m.getAnnotation(UrlMapping.class).url();
+                    methode = m.getAnnotation(UrlMapping.class).method();
+                    if (methode.equals("GET") || methode.equals("POST")) {
+                        mapping = new Mapping(className, m);
+                        urlMethod = new UrlMethod(url, methode);
+                        register(urlMethod, mapping);
+                    } else {
+                        throw new Exception("Methode inconnue : " + methode);
                     }
                 }
             }
@@ -44,15 +59,19 @@ public class FrontServlet extends HttpServlet {
         }
     }
 
-    private void register(RequestHandler req) {
-        String url = req.getTargetMethod().getAnnotation(UrlMapping.class).url();
-        if(!UrlValidator.isValid(url)){
+    private void register(UrlMethod urlMethod, Mapping req) {
+        String url = urlMethod.getUrl();
+        if (!UrlValidator.isValid(url)) {
             throw new IllegalStateException("Url format invalide");
         }
-        if (registry.containsKey(url)) {
-            throw new IllegalStateException("Duplicate mapping detected for URL: " + url);
+        if (registry.containsKey(urlMethod)) {
+            throw new IllegalStateException("Duplicate mapping detected for URL: " + urlMethod);
         }
-        registry.put(url,req);
+        registry.put(urlMethod, req);
+    }
+
+    private boolean isPrimitiveType(Object o){
+        return true;
     }
 
     @Override
@@ -73,17 +92,23 @@ public class FrontServlet extends HttpServlet {
     private void processRequest(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
         String URI = request.getRequestURI().substring(1);
+        String methode = request.getMethod();
         String[] parts = URI.split("/");
-        String url = "/" + String.join("/", Arrays.copyOfRange(parts,1,parts.length));
+        String url = "/" + String.join("/", Arrays.copyOfRange(parts, 1, parts.length));
         PrintWriter out = response.getWriter();
         try {
-            if(!registry.containsKey(url)){
-                throw new Exception("Url inconnu : " + url);
+            UrlMethod keyUrlMethod = new UrlMethod(url, methode);
+            if (!registry.containsKey(keyUrlMethod)) {
+                throw new Exception("REQUETE IMPOSSIBLE : " + keyUrlMethod);
             }
-            out.println(url);
-            RequestHandler req = registry.get(url);
-            String methodeName = req.getTargetMethod().getName();
-            String className = req.getControllerInstance().getClass().getSimpleName();
+            Mapping mapping = registry.get(keyUrlMethod);
+            Method method = mapping.getMethode();
+
+            Class<?> clazz = Class.forName(mapping.getController());
+            Object temp = clazz.getConstructor().newInstance(); 
+            
+            String methodeName = method.getName();
+            String className = mapping.getController();
             out.println(className + " || " + methodeName);
         } catch (Exception e) {
             throw new ServletException(e);

@@ -5,13 +5,23 @@ import annotation.UrlMapping;
 
 @Controller
 public class BackController {
-    @UrlMapping(path = "/alert/test")
+    @UrlMapping(url = "/alert/test")
     public void bonjour(){
 
     }
 
-    @UrlMapping(path = "/alert/list")
+    @UrlMapping(url = "/alert/list")
     public void wesh(String s){
+
+    }
+
+    @UrlMapping(url = "/alert/list", method = "POST")
+    public void test(){
+
+    }
+
+    @UrlMapping(url = "/alert/test")
+    public void transfert(){
 
     }
 }
