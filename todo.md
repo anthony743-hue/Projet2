@@ -22,9 +22,4 @@ Creer une classe Utility
 
 PullRequest : Limite Dimanche
 
-
-
-[ ] Etudier les bases de Java
-    [ ] Collection 30 min
-    [ ] BufferedReader | FileReader | InputStream 20 min * 3
-    [ ] try_catch 15 min
+sprint speciale

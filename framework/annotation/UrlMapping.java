@@ -5,9 +5,11 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
+import helper.HttpMethod;
+
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.METHOD)
 public @interface UrlMapping{
     String url();
-    String method() default "GET";
+    HttpMethod method() default HttpMethod.GET;
 }
