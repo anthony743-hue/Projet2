@@ -11,8 +11,13 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+
+import annotation.UrlMapping;
 import jakarta.servlet.http.*;
+import helper.HttpMethod;
 import helper.Mapping;
+import helper.UrlMethod;
 
 public class Utility {
 
@@ -54,7 +59,8 @@ public class Utility {
         return classes;
     }
 
-    public static List<Class<?>> getAnnotedClasses(Class<? extends Annotation> annotation, List<Class<?>> listClass) throws Exception {
+    public static List<Class<?>> getAnnotedClasses(Class<? extends Annotation> annotation, List<Class<?>> listClass)
+            throws Exception {
         List<Class<?>> keep = new ArrayList<>();
 
         for (Class<?> cl : listClass) {
@@ -65,6 +71,32 @@ public class Utility {
         return keep;
     }
 
+    public static void getMapUrlMapping(List<Class<?>> listClass, Map<UrlMethod, Mapping> map) throws Exception {
+        List<Method> listMethod = null;
+        UrlMethod urlMethod = null;
+        Mapping mapping = null;
+        String className = null;
+        String url = null;
+        HttpMethod methode = null;
+        for (Class<?> cl : listClass) {
+            className = cl.getName();
+            listMethod = getAnnotedMethod(cl, UrlMapping.class);
+            for (Method m : listMethod) {
+                m.setAccessible(true);
+
+                url = m.getAnnotation(UrlMapping.class).url();
+                methode = m.getAnnotation(UrlMapping.class).method();
+                if (methode != null) {
+                    urlMethod = new UrlMethod(url, methode);
+                    mapping = new Mapping(className, m);
+                    map.put(urlMethod, mapping);
+                } else {
+                    throw new Exception("Methode non defini pour l'url : " + url);
+                }
+            }
+        }
+    }
+
     public static List<Method> getAnnotedMethod(Class<?> cl, Class<? extends Annotation> annotation) throws Exception {
         List<Method> keep = new ArrayList<>();
         Method[] methods = cl.getDeclaredMethods();
@@ -73,7 +105,7 @@ public class Utility {
             m.setAccessible(true);
 
             if (m.isAnnotationPresent(annotation)) {
-                keep.add(m);        
+                keep.add(m);
             }
         }
 
@@ -94,7 +126,7 @@ public class Utility {
         return keep;
     }
 
-    public static String getUrlFromRequest(HttpServletRequest request){
+    public static String getUrlFromRequest(HttpServletRequest request) {
         String URI = request.getRequestURI().substring(1);
         String[] parts = URI.split("/");
         String url = "/" + String.join("/", Arrays.copyOfRange(parts, 1, parts.length));

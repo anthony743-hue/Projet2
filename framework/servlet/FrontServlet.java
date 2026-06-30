@@ -30,50 +30,9 @@ public class FrontServlet extends HttpServlet {
     private Map<UrlMethod, Mapping> registry;
 
     public void init() throws ServletException {
-        registry = new HashMap<>() {
-            @Override
-            public Mapping put(UrlMethod key, Mapping value) {
-                String url = key.getUrl();
-                if (!UrlValidator.isValid(url)) {
-                    throw new IllegalStateException("Url format invalide");
-                }
-                if (containsKey(key)) {
-                    throw new IllegalStateException("Duplicate mapping detected for URL: " + key);
-                }
-                return super.put(key, value);
-            }
-        };
-
-        String packageName = this.getInitParameter("packageName");
-        try {
-            listClass = Utility.getAnnotedClasses(Controller.class, Utility.getClassInPackage(packageName));
-            List<Method> listMethod = null;
-            UrlMethod urlMethod = null;
-            Mapping mapping = null;
-            String className = null;
-            String url = null;
-            HttpMethod methode = null;
-
-            for (Class<?> cl : listClass) {
-                className = cl.getName();
-                listMethod = Utility.getAnnotedMethod(cl, UrlMapping.class);
-                for (Method m : listMethod) {
-                    m.setAccessible(true);
-
-                    url = m.getAnnotation(UrlMapping.class).url();
-                    methode = m.getAnnotation(UrlMapping.class).method();
-                    if (methode != null) {
-                        urlMethod = new UrlMethod(url, methode);
-                        mapping = new Mapping(className, m);
-                        registry.put(urlMethod, mapping);
-                    } else {
-                        throw new Exception("Methode non defini pour l'url : "  + url);
-                    }
-                }
-            }
-        } catch (Exception e) {
-            throw new ServletException(e);
-        }
+        registry = (HashMap) this.getServletContext().getAttribute("mapUrl");
+        listClass = (List<Class<?>>) this.getServletContext().getAttribute("listClass");
+       
     }
 
     @Override

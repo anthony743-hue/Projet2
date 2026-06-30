@@ -7,16 +7,17 @@
     <servlet>
         <servlet-name>FrontServlet</servlet-name>
         <servlet-class>servlet.FrontServlet</servlet-class>
-        <init-param>
-            <param-name>packageName</param-name>
-            <param-value>main.java.controllers</param-value>
-            <description>Nom du repertoire contenant les controllers</description>
-        </init-param>
     </servlet>
 
     <servlet-mapping>
         <servlet-name>FrontServlet</servlet-name>
         <url-pattern>/*</url-pattern>
     </servlet-mapping>
+
+    <context-param>
+        <param-name>packageName</param-name>
+        <param-value>main.java.controllers</param-value>
+        <description>Nom du repertoire contenant les controllers</description>
+    </context-param>
     
 </web-app>
