@@ -9,8 +9,9 @@ import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
-
+import jakarta.servlet.http.*;
 import helper.Mapping;
 
 public class Utility {
@@ -91,5 +92,12 @@ public class Utility {
         }
 
         return keep;
+    }
+
+    public static String getUrlFromRequest(HttpServletRequest request){
+        String URI = request.getRequestURI().substring(1);
+        String[] parts = URI.split("/");
+        String url = "/" + String.join("/", Arrays.copyOfRange(parts, 1, parts.length));
+        return url;
     }
 }
