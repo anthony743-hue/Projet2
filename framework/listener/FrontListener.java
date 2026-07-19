@@ -1,6 +1,7 @@
 package listener;
 
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,17 +34,41 @@ public class FrontListener implements ServletContextListener {
                 return super.put(key, value);
             }
         };
+        String packageName = sce.getServletContext().getInitParameter("packageName");
+        List<Class<?>> listClass = new ArrayList<>();
         try {
-            String packageName = sce.getServletContext().getInitParameter("packageName");
-            List<Class<?>> listClass = Utility.getAnnotedClasses(Controller.class,
-                    Utility.getClassInPackage(packageName));
-            Utility.getMapUrlMapping(listClass, map);
-
-            sce.getServletContext().setAttribute("mapUrl", map);
-            sce.getServletContext().setAttribute("listClass", listClass);
+            Utility.getClassInPackage(packageName, listClass);
+            Method[] listMethod;
+            UrlMethod urlMethod = null;
+            Mapping mapping = null;
+            String className = null;
+            String url = null;
+            HttpMethod methode = null;
+            for (Class<?> cl : listClass) {
+                className = cl.getName();
+                if (cl.isAnnotationPresent(Controller.class)) {
+                    listMethod = cl.getDeclaredMethods();
+                    for (Method m : listMethod) {
+                        m.setAccessible(true);
+                        if (m.isAnnotationPresent(UrlMapping.class)) {
+                            url = m.getAnnotation(UrlMapping.class).url();
+                            methode = m.getAnnotation(UrlMapping.class).method();
+                            if (methode != null) {
+                                urlMethod = new UrlMethod(url, methode);
+                                mapping = new Mapping(className, m);
+                                map.put(urlMethod, mapping);
+                            } else {
+                                throw new Exception("Methode non defini pour l'url : " + url);
+                            }
+                        }
+                    }
+                }
+            }
         } catch (Exception e) {
-            System.err.println(e);
+            System.err.println(e.getMessage());
         }
+        sce.getServletContext().setAttribute("mapUrl", map);
+        sce.getServletContext().setAttribute("listClass", listClass);
     }
 
     @Override
