@@ -19,6 +19,7 @@ import java.util.HashMap;
 
 import utils.Utility;
 import annotation.Controller;
+import annotation.RestController;
 import annotation.UrlMapping;
 import helper.HttpMethod;
 import helper.Mapping;
@@ -63,11 +64,9 @@ public class FrontServlet extends HttpServlet {
 
         Object temp = null;
         Object retour = null;
-        UrlMethod keyUrlMethod = null;
         Mapping mapping = null;
-        HttpMethod meth = null;
-        meth = HttpMethod.valueOf(methode);
-        keyUrlMethod = new UrlMethod(url, meth);
+        HttpMethod meth = HttpMethod.valueOf(methode);
+        UrlMethod keyUrlMethod = new UrlMethod(url, meth);
         try {
             if (registry.containsKey(keyUrlMethod)) {
                 mapping = registry.get(keyUrlMethod);
@@ -76,14 +75,18 @@ public class FrontServlet extends HttpServlet {
                 Class<?> clazz = Class.forName(mapping.getController());
                 temp = clazz.getConstructor().newInstance();
                 retour = method.invoke(temp);
-                if (retour instanceof ModelView mv) {
+                if (clazz.isAnnotationPresent(RestController.class)) {
+                    PrintWriter out = request.getWriter();
+                    out.write(Utility.toJson(retour));
+                    out.flush();
+                } else if (retour instanceof ModelView mv) {
                     Map<String, Object> attr = mv.getAttributes();
                     for (Entry<String, Object> entry : attr.entrySet()) {
                         request.setAttribute(entry.getKey(), entry.getValue());
                     }
                     request.getRequestDispatcher(
                             String.format(formatView, mv.getView()))
-                    .forward(request, response);
+                            .forward(request, response);
                 }
             } else {
                 out.println(String.format("L'url traite %s : ", url));

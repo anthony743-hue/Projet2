@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 
 import annotation.Controller;
+import annotation.RestController;
 import annotation.UrlMapping;
 import helper.HttpMethod;
 import helper.Mapping;
@@ -46,7 +47,7 @@ public class FrontListener implements ServletContextListener {
             HttpMethod methode = null;
             for (Class<?> cl : listClass) {
                 className = cl.getName();
-                if (cl.isAnnotationPresent(Controller.class)) {
+                if (cl.isAnnotationPresent(Controller.class) || cl.isAnnotationPresent(RestController.class)) {
                     listMethod = cl.getDeclaredMethods();
                     for (Method m : listMethod) {
                         m.setAccessible(true);
