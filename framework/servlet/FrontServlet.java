@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.lang.annotation.ElementType;
 import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -17,6 +18,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 
+import utils.Converter;
 import utils.Utility;
 import annotation.Controller;
 import annotation.RestController;
@@ -60,25 +62,34 @@ public class FrontServlet extends HttpServlet {
 
         String url = Utility.getUrlFromRequest(request);
         String methode = request.getMethod();
-        PrintWriter out = response.getWriter();
 
         Object temp = null;
         Object retour = null;
         Mapping mapping = null;
         HttpMethod meth = HttpMethod.valueOf(methode);
         UrlMethod keyUrlMethod = new UrlMethod(url, meth);
-        try {
+
+        try (PrintWriter out = response.getWriter()) {
             if (registry.containsKey(keyUrlMethod)) {
                 mapping = registry.get(keyUrlMethod);
 
                 Method method = mapping.getMethode();
                 Class<?> clazz = Class.forName(mapping.getController());
+
+                Parameter[] parameters = method.getParameters();
+                Object[] paramArr = new Object[parameters.length];
+                for (int i = 0; i < parameters.length; i++) {
+                    paramArr[i] = Utility.resolveParameter(parameters[i], request);
+                }
+
                 temp = clazz.getConstructor().newInstance();
-                retour = method.invoke(temp);
-                if (clazz.isAnnotationPresent(RestController.class)) {
-                    PrintWriter out = request.getWriter();
+                retour = method.invoke(temp, paramArr);
+
+                if (method.isAnnotationPresent(RestController.class)) {
+                    response.setContentType("application/json;charset=UTF-8");
                     out.write(Utility.toJson(retour));
                     out.flush();
+
                 } else if (retour instanceof ModelView mv) {
                     Map<String, Object> attr = mv.getAttributes();
                     for (Entry<String, Object> entry : attr.entrySet()) {
@@ -103,6 +114,7 @@ public class FrontServlet extends HttpServlet {
                     out.println(className + " | " + methodeName);
                 }
             }
+
         } catch (Exception e) {
             throw new ServletException(e);
         }
