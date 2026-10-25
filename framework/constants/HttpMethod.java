@@ -1,4 +1,4 @@
-package helper;
+package constants;
 
 public enum HttpMethod {
     GET,

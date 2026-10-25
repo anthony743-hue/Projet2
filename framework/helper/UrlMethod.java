@@ -2,6 +2,8 @@ package helper;
 
 import java.util.Objects;
 
+import constants.HttpMethod;
+
 public final class UrlMethod {
     private final String url;
     private final HttpMethod method;
