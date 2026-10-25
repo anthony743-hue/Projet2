@@ -19,27 +19,24 @@ import java.util.Arrays;
 import java.util.HashMap;
 
 import utils.Converter;
+import utils.UrlValidator;
 import utils.Utility;
+import wrapper.FileWrapper;
+import wrapper.Mapping;
+import wrapper.ModelView;
+import wrapper.UrlMethod;
 import annotation.Controller;
 import annotation.RestController;
 import annotation.UrlMapping;
-import helper.HttpMethod;
-import helper.Mapping;
-import helper.ModelView;
-import helper.UrlMethod;
-import helper.UrlValidator;
+import constants.HttpMethod;
+import jakarta.servlet.annotation.MultipartConfig;
 
+@MultipartConfig
 public class FrontServlet extends HttpServlet {
-    private String formatView;
-    private List<Class<?>> listClass;
     private Map<UrlMethod, Mapping> registry;
 
     public void init() throws ServletException {
         registry = (HashMap) this.getServletContext().getAttribute("mapUrl");
-        listClass = (List<Class<?>>) this.getServletContext().getAttribute("listClass");
-        String prefix = this.getServletContext().getInitParameter("prefix");
-        String suffix = this.getServletContext().getInitParameter("suffix");
-        formatView = prefix + "%s" + suffix;
     }
 
     @Override
@@ -59,6 +56,9 @@ public class FrontServlet extends HttpServlet {
      */
     private void processRequest(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
+        String prefix = this.getServletContext().getInitParameter("prefix");
+        String suffix = this.getServletContext().getInitParameter("suffix");
+        String formatView = prefix + "%s" + suffix;
 
         String url = Utility.getUrlFromRequest(request);
         String methode = request.getMethod();

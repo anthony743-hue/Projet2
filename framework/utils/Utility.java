@@ -2,6 +2,7 @@ package utils;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.Serializable;
 import java.lang.annotation.Annotation;
 import java.lang.annotation.ElementType;
@@ -21,10 +22,12 @@ import java.util.List;
 import java.util.Map;
 
 import annotation.UrlMapping;
+import constants.HttpMethod;
 import jakarta.servlet.http.*;
-import helper.HttpMethod;
-import helper.Mapping;
-import helper.UrlMethod;
+import jakarta.servlet.http.Part;
+import wrapper.FileWrapper;
+import wrapper.Mapping;
+import wrapper.UrlMethod;
 
 public class Utility {
 
@@ -101,6 +104,16 @@ public class Utility {
                 continue; // champ absent du formulaire : on laisse la valeur par défaut
             }
             field.setAccessible(true);
+            if(field.getType() == FileWrapper.class){
+                Part part = request.getPart("file");
+
+                String fileName = part.getSubmittedFileName();
+                InputStream in = part.getInputStream();
+                FileWrapper fwrp = FileWrapper.from(in, fileName);
+                field.set(instance, fwrp);
+                in.close();
+                continue;
+            }
             Object value = Converter.convert(rawField, field.getType());
             field.set(instance, value);
         }
