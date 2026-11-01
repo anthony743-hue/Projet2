@@ -68,7 +68,6 @@ public class FrontListener implements ServletContextListener {
             System.err.println(e.getMessage());
         }
         sce.getServletContext().setAttribute("mapUrl", map);
-        sce.getServletContext().setAttribute("listClass", listClass);
     }
 
     @Override

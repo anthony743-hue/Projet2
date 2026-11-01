@@ -1,35 +1,49 @@
 package utils;
 
 import java.io.File;
-import java.io.IOException;
 import java.io.InputStream;
-import java.io.Serializable;
-import java.lang.annotation.Annotation;
-import java.lang.annotation.ElementType;
 import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
-import java.math.BigDecimal;
-import java.nio.file.DirectoryStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 
-import annotation.UrlMapping;
-import constants.HttpMethod;
 import jakarta.servlet.http.*;
-import jakarta.servlet.http.Part;
 import wrapper.FileWrapper;
-import wrapper.Mapping;
-import wrapper.UrlMethod;
 
 public class Utility {
+
+    public static String getUrlFromRequest(HttpServletRequest request) {
+        String uri = request.getRequestURI();
+        int slashIndex = uri.indexOf('/', 1);
+
+        return (slashIndex == -1) ? "/" : uri.substring(slashIndex);
+    }
+
+    public static Object resolveParameter(Parameter parameter, HttpServletRequest request) throws Exception {
+        Class<?> type = parameter.getType();
+        String name = parameter.getName();
+
+        if (Converter.isSimpleType(type)) {
+            String rawField = request.getParameter(name);
+            if (rawField == null) {
+                throw new Exception(Messages.get("error.param.missing", request.getLocale(), name));
+            }
+            return Converter.convert(rawField, type);
+        }
+
+        Object instance = type.getConstructor().newInstance();
+        for (Field field : type.getDeclaredFields()) {
+            field.setAccessible(true);
+            String rawField = request.getParameter(field.getName());
+            if (rawField == null)
+                continue;
+
+            Object value = Converter.convert(rawField, field.getType());
+            field.set(instance, value);
+        }
+        return instance;
+    }
 
     public static void getClassInPackage(String packageName, List<Class<?>> classes) throws Exception {
         String packagePath = packageName.replace('.', '/');
@@ -49,74 +63,66 @@ public class Utility {
     }
 
     public static String toJson(Object obj) throws IllegalArgumentException, IllegalAccessException {
+        StringBuilder sb = new StringBuilder();
+        toJson(obj, sb);
+        return sb.toString();
+    }
+
+    public static Object getFieldValue(Object obj, String fieldName) throws IllegalAccessException {
+        if (obj == null)
+            throw new IllegalArgumentException("L'objet ne peut pas être null");
+        if (fieldName == null)
+            throw new IllegalArgumentException("Le nom du champ ne peut pas être null");
+
+        Class<?> clazz = obj.getClass();
+        while (clazz != null && clazz != Object.class) {
+            try {
+                Field field = clazz.getDeclaredField(fieldName);
+                field.setAccessible(true);
+                return field.get(obj);
+            } catch (NoSuchFieldException e) {
+                clazz = clazz.getSuperclass();
+            }
+        }
+        throw new IllegalArgumentException(
+                "Champ '" + fieldName + "' introuvable dans " + obj.getClass().getName());
+    }
+
+    private static void toJson(Object obj, StringBuilder sb) throws IllegalArgumentException, IllegalAccessException {
+        if (obj == null) {
+            sb.append("null");
+            return;
+        }
+
+        if (obj instanceof String s) {
+            sb.append("\"").append(s.replace("\"", "\\\"")).append("\"");
+            return;
+        }
+        if (obj instanceof Number || obj instanceof Boolean) {
+            sb.append(obj);
+            return;
+        }
+
         Field[] champs = obj.getClass().getDeclaredFields();
-        StringBuffer sb = new StringBuffer("");
-        String format = "\"%s\" : \"%s\"";
-        String format2 = "\"%s\" : %s";
-        for (int i = 0; i < champs.length; i++) {
-            champs[i].setAccessible(true);
-            Object value = champs[i].get(obj);
-            String name = champs[i].getName();
-            Class<?> type = champs[i].getType();
+        sb.append("{");
+        boolean first = true;
+
+        for (Field champ : champs) {
+            champ.setAccessible(true);
+            Object value = champ.get(obj);
+
             if (value == null)
                 continue;
-            if (type.isPrimitive() || type == String.class) {
-                sb.append(String.format(format, name, String.valueOf(value)));
-            } else {
-                sb.append(String.format(format2, name, toJson(value)));
-            }
-            if (i < champs.length - 1) {
+
+            if (!first) {
                 sb.append(",");
             }
+            first = false;
+
+            sb.append("\"").append(champ.getName()).append("\":");
+
+            toJson(value, sb);
         }
-        ;
-        return String.format("{%s}", String.join(",", sb.toString().split(",", 0)));
-    }
-
-    public static String getUrlFromRequest(HttpServletRequest request) {
-        String URI = request.getRequestURI().substring(1);
-        String[] parts = URI.split("/");
-        String url = "/" + String.join("/", Arrays.copyOfRange(parts, 1,
-                parts.length));
-        return url;
-    }
-
-    public static Object resolveParameter(Parameter parameter, HttpServletRequest request)
-            throws Exception {
-
-        Class<?> type = parameter.getType();
-        String name = parameter.getName();
-
-        // Cas simple : on parse directement la valeur du formulaire
-        if (Converter.isSimpleType(type)) {
-            String rawField = request.getParameter(name);
-            if (rawField == null) {
-                throw new Exception("Parametre manquant : " + name);
-            }
-            return Converter.convert(rawField, type);
-        }
-
-        // Cas objet : on instancie et on remplit chaque champ
-        Object instance = type.getConstructor().newInstance();
-        for (Field field : type.getDeclaredFields()) {
-            String rawField = request.getParameter(field.getName());
-            if (rawField == null) {
-                continue; // champ absent du formulaire : on laisse la valeur par défaut
-            }
-            field.setAccessible(true);
-            if(field.getType() == FileWrapper.class){
-                Part part = request.getPart("file");
-
-                String fileName = part.getSubmittedFileName();
-                InputStream in = part.getInputStream();
-                FileWrapper fwrp = FileWrapper.from(in, fileName);
-                field.set(instance, fwrp);
-                in.close();
-                continue;
-            }
-            Object value = Converter.convert(rawField, field.getType());
-            field.set(instance, value);
-        }
-        return instance;
+        sb.append("}");
     }
 }
