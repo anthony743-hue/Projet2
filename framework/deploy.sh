@@ -16,4 +16,4 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-jar cvf /home/itu/L2/app/src/main/webapp/WEB-INF/lib/framework.jar -C $BUILD_DIR .
+jar cvf /home/itu/itu/study/Naina/Sprint/Framework/Test/lib/framework.jar -C $BUILD_DIR .

@@ -1,42 +1,46 @@
 package servlet;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.PrintWriter;
-import java.lang.annotation.ElementType;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
-import java.util.List;
+import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 
 import jakarta.servlet.*;
+import jakarta.servlet.annotation.MultipartConfig;
 import jakarta.servlet.http.*;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
 
-import utils.Converter;
-import utils.UrlValidator;
+import annotation.Auth;
+import annotation.RestController;
+import constants.HttpCode;
+import constants.HttpMethod;
+import utils.Messages;
+import utils.Responder;
 import utils.Utility;
 import wrapper.FileWrapper;
 import wrapper.Mapping;
 import wrapper.ModelView;
+import wrapper.MySession;
 import wrapper.UrlMethod;
-import annotation.Controller;
-import annotation.RestController;
-import annotation.UrlMapping;
-import constants.HttpMethod;
-import jakarta.servlet.annotation.MultipartConfig;
 
 @MultipartConfig
 public class FrontServlet extends HttpServlet {
     private Map<UrlMethod, Mapping> registry;
+    private Map<String, Object> controllerInstances;
 
     public void init() throws ServletException {
-        registry = (HashMap) this.getServletContext().getAttribute("mapUrl");
+        registry = (HashMap<UrlMethod, Mapping>) this.getServletContext().getAttribute("mapUrl");
+        controllerInstances = new HashMap<>();
+        String i18nBase = this.getServletContext().getInitParameter("i18nBase");
+        if (i18nBase == null || i18nBase.isBlank()) {
+            i18nBase = "messages";
+        }
+        Messages.init(i18nBase);
     }
 
     @Override
@@ -51,9 +55,6 @@ public class FrontServlet extends HttpServlet {
         processRequest(request, response);
     }
 
-    /**
-     * Méthode commune de traitement des requêtes GET et POST.
-     */
     private void processRequest(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
         String prefix = this.getServletContext().getInitParameter("prefix");
@@ -61,60 +62,138 @@ public class FrontServlet extends HttpServlet {
         String formatView = prefix + "%s" + suffix;
 
         String url = Utility.getUrlFromRequest(request);
-        String methode = request.getMethod();
-
-        Object temp = null;
-        Object retour = null;
-        Mapping mapping = null;
-        HttpMethod meth = HttpMethod.valueOf(methode);
+        HttpMethod meth = HttpMethod.valueOf(request.getMethod());
         UrlMethod keyUrlMethod = new UrlMethod(url, meth);
+
+        Locale locale = request.getLocale();
 
         try (PrintWriter out = response.getWriter()) {
             if (registry.containsKey(keyUrlMethod)) {
-                mapping = registry.get(keyUrlMethod);
-
+                Mapping mapping = registry.get(keyUrlMethod);
                 Method method = mapping.getMethode();
-                Class<?> clazz = Class.forName(mapping.getController());
 
-                Parameter[] parameters = method.getParameters();
-                Object[] paramArr = new Object[parameters.length];
-                for (int i = 0; i < parameters.length; i++) {
-                    paramArr[i] = Utility.resolveParameter(parameters[i], request);
+                HttpSession httpSession = request.getSession();
+
+                // --- Vérification d'authentification ---
+                if (method.isAnnotationPresent(Auth.class)) {
+                    String nameSession = this.getServletContext().getInitParameter("userSession");
+                    Object user = httpSession.getAttribute(nameSession);
+
+                    if (user == null) {
+                        String msg = Messages.get("auth.unauthorized", locale);
+                        if (method.isAnnotationPresent(RestController.class)) {
+                            Responder.error(response, HttpCode.UNAUTHORIZED, msg);
+                        } else {
+                            Responder.text(response, HttpCode.UNAUTHORIZED, msg);
+                        }
+                        return;
+                    }
+
+                    Auth auth = method.getAnnotation(Auth.class);
+                    if (auth.roles() != null && auth.roles().length > 0) {
+                        String userRole = (String) Utility.getFieldValue(user, "role");
+                        boolean hasRole = false;
+                        for (String role : auth.roles()) {
+                            if (role.equals(userRole)) {
+                                hasRole = true;
+                                break;
+                            }
+                        }
+                        if (!hasRole) {
+                            String msg = Messages.get("auth.forbidden", locale);
+                            if (method.isAnnotationPresent(RestController.class)) {
+                                Responder.error(response, HttpCode.FORBIDDEN, msg);
+                            } else {
+                                Responder.text(response, HttpCode.FORBIDDEN, msg);
+                            }
+                            return;
+                        }
+                    }
                 }
 
-                temp = clazz.getConstructor().newInstance();
-                retour = method.invoke(temp, paramArr);
+                // 1. Extraction du fichier unique
+                FileWrapper uploadedFile = null;
+                String contentType = request.getContentType();
+                if (contentType != null && contentType.toLowerCase().startsWith("multipart/")) {
+                    for (Part part : request.getParts()) {
+                        if (part.getSubmittedFileName() != null && part.getSize() > 0) {
+                            try (InputStream in = part.getInputStream()) {
+                                uploadedFile = FileWrapper.from(in, part.getSubmittedFileName(),
+                                        part.getContentType());
+                            } finally {
+                                part.delete();
+                            }
+                            break;
+                        }
+                    }
+                }
 
+                // 2. Résolution des paramètres
+                Parameter[] parameters = method.getParameters();
+                Object[] paramArr = new Object[parameters.length];
+                MySession session = null;
+
+                for (int i = 0; i < parameters.length; i++) {
+                    if (parameters[i].getType() == FileWrapper.class) {
+                        paramArr[i] = uploadedFile;
+                    } else if (parameters[i].getType() == MySession.class) {
+                        if (session == null) {
+                            session = new MySession();
+                            Enumeration<String> attributeNames = httpSession.getAttributeNames();
+                            while (attributeNames.hasMoreElements()) {
+                                String attr = attributeNames.nextElement();
+                                session.add(attr, httpSession.getAttribute(attr));
+                            }
+                        }
+                        paramArr[i] = session;
+                    } else {
+                        paramArr[i] = Utility.resolveParameter(parameters[i], request);
+                    }
+                }
+
+                // 3. Invocation
+                Class<?> clazz = Class.forName(mapping.getController());
+                Object controller = controllerInstances.computeIfAbsent(clazz.getName(), k -> {
+                    try {
+                        return clazz.getConstructor().newInstance();
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                });
+
+                Object retour = method.invoke(controller, paramArr);
+
+                // Synchronisation session
+                if (session != null) {
+                    for (Map.Entry<String, Object> entry : session.getMap().entrySet()) {
+                        if (entry.getValue() == null) {
+                            httpSession.removeAttribute(entry.getKey());
+                        } else {
+                            httpSession.setAttribute(entry.getKey(), entry.getValue());
+                        }
+                    }
+                }
+
+                // 4. Gestion de la réponse
                 if (method.isAnnotationPresent(RestController.class)) {
                     response.setContentType("application/json;charset=UTF-8");
                     out.write(Utility.toJson(retour));
                     out.flush();
-
                 } else if (retour instanceof ModelView mv) {
-                    Map<String, Object> attr = mv.getAttributes();
-                    for (Entry<String, Object> entry : attr.entrySet()) {
+                    for (Entry<String, Object> entry : mv.getAttributes().entrySet()) {
                         request.setAttribute(entry.getKey(), entry.getValue());
                     }
-                    request.getRequestDispatcher(
-                            String.format(formatView, mv.getView()))
+                    request.getRequestDispatcher(String.format(formatView, mv.getView()))
                             .forward(request, response);
                 }
             } else {
-                out.println(String.format("L'url traite %s : ", url));
-                out.println("============================ LISTE DES URLMETHODE ==========================");
+                out.println(Messages.get("url.treated", locale, url));
+                out.println(Messages.get("url.list.title", locale));
                 for (Map.Entry<UrlMethod, Mapping> map : registry.entrySet()) {
-                    mapping = map.getValue();
-                    Method method = mapping.getMethode();
-                    Class<?> clazz = Class.forName(mapping.getController());
-                    temp = clazz.getConstructor().newInstance();
-                    method.invoke(temp);
-
-                    String methodeName = method.getName();
-                    String className = mapping.getController();
-                    out.println(className + " | " + methodeName);
+                    Mapping m = map.getValue();
+                    out.println(m.getController() + " | " + m.getMethode().getName());
                 }
             }
-
         } catch (Exception e) {
             throw new ServletException(e);
         }
